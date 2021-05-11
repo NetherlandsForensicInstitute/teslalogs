@@ -1,0 +1,25 @@
+name: teslalogs
+channels: 
+  - pyviz
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7
+  - pip
+  - bokeh=2.2.0 # Combined with panel this one works
+  - holoviews
+  - geoviews
+  - datashader
+  - panel=0.10.3 # Just not 0.11.[0-3] which bugs on the Video widget local files
+  - pyviz_comms
+  - jupyterlab
+  - jupytext
+  - pandas
+  - numpy
+  - pytables
+  - tqdm
+  - pip:
+    - kaitaistruct
+    - cantools
+    - ffmpeg-python
+    - opencv-python

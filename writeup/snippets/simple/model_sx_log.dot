@@ -1,0 +1,34 @@
+digraph {
+	rankdir=LR;
+	node [shape=plaintext];
+	subgraph cluster__model_sx_log {
+		label="ModelSxLog";
+		graph[style=dotted];
+
+		model_sx_log__seq [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+			<TR><TD BGCOLOR="#E0FFE0">pos</TD><TD BGCOLOR="#E0FFE0">size</TD><TD BGCOLOR="#E0FFE0">type</TD><TD BGCOLOR="#E0FFE0">id</TD></TR>
+			<TR><TD PORT="log_entry_pos">0</TD><TD PORT="log_entry_size">...</TD><TD>Record</TD><TD PORT="log_entry_type">log_entry</TD></TR>
+		</TABLE>>];
+		subgraph cluster__record {
+			label="ModelSxLog::Record";
+			graph[style=dotted];
+
+			record__seq [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+				<TR><TD BGCOLOR="#E0FFE0">pos</TD><TD BGCOLOR="#E0FFE0">size</TD><TD BGCOLOR="#E0FFE0">type</TD><TD BGCOLOR="#E0FFE0">id</TD></TR>
+				<TR><TD PORT="delim_pos">0</TD><TD PORT="delim_size">1</TD><TD></TD><TD PORT="delim_type">delim</TD></TR>
+				<TR><TD PORT="tag_pos">1</TD><TD PORT="tag_size">1</TD><TD>u1</TD><TD PORT="tag_type">tag</TD></TR>
+				<TR><TD PORT="length_pos">2</TD><TD PORT="length_size">2</TD><TD>u2be</TD><TD PORT="length_type">length</TD></TR>
+				<TR><TD PORT="body_pos">4</TD><TD PORT="body_size">(length - 4)</TD><TD></TD><TD PORT="body_type">body</TD></TR>
+				<TR><TD PORT="checksum_pos">...</TD><TD PORT="checksum_size">1</TD><TD>u1</TD><TD PORT="checksum_type">checksum</TD></TR>
+			</TABLE>>];
+			record__inst__raw_bytes [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+				<TR><TD BGCOLOR="#E0FFE0">pos</TD><TD BGCOLOR="#E0FFE0">size</TD><TD BGCOLOR="#E0FFE0">type</TD><TD BGCOLOR="#E0FFE0">id</TD></TR>
+				<TR><TD PORT="raw_bytes_pos">(_io.pos - (length + 1))</TD><TD PORT="raw_bytes_size">(length + 1)</TD><TD></TD><TD PORT="raw_bytes_type">raw_bytes</TD></TR>
+			</TABLE>>];
+		}
+	}
+	model_sx_log__seq:log_entry_type -> record__seq [style=bold];
+	record__seq:length_type -> record__seq:body_size [color="#404040"];
+	record__seq:length_type -> record__inst__raw_bytes:raw_bytes_pos [color="#404040"];
+	record__seq:length_type -> record__inst__raw_bytes:raw_bytes_size [color="#404040"];
+}
