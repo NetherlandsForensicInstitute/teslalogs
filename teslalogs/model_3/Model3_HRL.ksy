@@ -61,18 +61,18 @@ types:
           cases:
             'record_flags::can_frame': can_frame
             'record_flags::timestamp_frame': timestamp_frame
-            'record_flags::unknown_frame': unknown_frame  # sometimes coincides with stopping mid-block and continue in the next
+            'record_flags::end_of_block': unknown_frame
     enums:
       record_flags:
         0: can_frame
         1: timestamp_frame
-        3: unknown_frame
+        3: end_of_block
     instances:
       raw_record:
         pos: 0
         size: _root.recordsize
       end_of_records:
-        value: raw_record == [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        value: flags == record_flags::end_of_block
 
   can_frame:
     seq:

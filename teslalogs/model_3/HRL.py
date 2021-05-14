@@ -3,7 +3,7 @@ import pandas as pd
 from zlib import crc32
 from argparse import ArgumentParser
 from pathlib import Path
-from .model_3_hrl import Model3Hrl
+from teslalogs.model_3.model_3_hrl import Model3Hrl
 
 
 def verify_block(block):

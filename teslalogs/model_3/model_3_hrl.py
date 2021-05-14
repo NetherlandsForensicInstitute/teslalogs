@@ -141,7 +141,7 @@ class Model3Hrl(KaitaiStruct):
         class RecordFlags(Enum):
             can_frame = 0
             timestamp_frame = 1
-            unknown_frame = 3
+            end_of_block = 3
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -157,7 +157,7 @@ class Model3Hrl(KaitaiStruct):
                 self.payload = Model3Hrl.CanFrame(self._io, self, self._root)
             elif _on == Model3Hrl.Record.RecordFlags.timestamp_frame:
                 self.payload = Model3Hrl.TimestampFrame(self._io, self, self._root)
-            elif _on == Model3Hrl.Record.RecordFlags.unknown_frame:
+            elif _on == Model3Hrl.Record.RecordFlags.end_of_block:
                 self.payload = Model3Hrl.UnknownFrame(self._io, self, self._root)
 
         @property
@@ -176,7 +176,7 @@ class Model3Hrl(KaitaiStruct):
             if hasattr(self, '_m_end_of_records'):
                 return self._m_end_of_records if hasattr(self, '_m_end_of_records') else None
 
-            self._m_end_of_records = self.raw_record == b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+            self._m_end_of_records = self.flags == Model3Hrl.Record.RecordFlags.end_of_block
             return self._m_end_of_records if hasattr(self, '_m_end_of_records') else None
 
 
