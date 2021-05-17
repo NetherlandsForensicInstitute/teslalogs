@@ -113,7 +113,7 @@ def decode_id_vectorized(df, dbc, ID, choice=True):
 
     if msg.is_multiplexed():
         muxers = [s for s in msg.signals if s.is_multiplexer]
-        assert len(muxers) == 1 and len(msg.signal_tree) == 1, 'Only supports single multiplexer for now!'
+        assert len(muxers) == 1, 'Only supports single multiplexer for now!'
         return decode_mux(tmp, msg, choice=choice)
 
     out = dict()
@@ -137,11 +137,11 @@ def decode_mux(df, msg, choice=True):
 
     mux_sig = decode_signal(raw, mux, choice=False)
     tree = msg.signal_tree[0][mux.name]
-    for mux_val, mux_sigs in tree.items():
+    for mux_val in [int(v) for v in mux_sig.unique()]:
+        mux_sigs = tree[mux_val]
         mux_idx = (mux_sig == mux_val)
         for signal in mux_sigs:
             signal = msg.get_signal_by_name(signal)
-
             if choice and signal.choices and not just_SNA(signal):
                 empty = empty_str.copy()
             else:
@@ -150,6 +150,9 @@ def decode_mux(df, msg, choice=True):
             sig = decode_signal(raw, signal, choice=choice)
             sig_out[mux_idx] = sig[mux_idx]
             out[signal.name] = sig_out
+    if len(msg.signal_tree) > 1:
+        for s in msg.signal_tree[1:]:
+            out[s] = decode_signal(raw, msg.get_signal_by_name(s), choice=choice)
     out[mux.name] = decode_signal(raw, mux, choice=choice)
     decoded = pd.DataFrame(out)
     decoded.index = df.index
@@ -235,6 +238,7 @@ class SignalViewer(param.Parameterized):
     def _update_signals(self):
         signals = self._signals[self.message]
         self._data = decode_id_vectorized(self.df, self.dbc, self.dbc.get_message_by_name(self.message).frame_id, choice=self.choice)
+        signals = [s for s in signals if s in self._data.columns]
         self.param['signal'].objects = signals
         self.signal = signals[0]
 
@@ -243,7 +247,8 @@ class SignalViewer(param.Parameterized):
         data = self._data.loc[self._data[self.signal].notna()]
         data['channel'] = data['channel'].astype(str)
         if self.plot_type == 'Curve':
-            plot = hv.Curve(data, 'timestamp', [self.signal, 'channel'], label=self.signal)
+            interpolation = 'steps-post' if pd.api.types.is_string_dtype(data[self.signal]) else 'linear'
+            plot = hv.Curve(data, 'timestamp', [self.signal, 'channel'], label=self.signal).opts(interpolation=interpolation)
         elif self.plot_type == 'Scatter':
             plot = hv.Scatter(data, 'timestamp', [self.signal, 'channel']).opts(color='channel', cmap='Dark2')
         else:
