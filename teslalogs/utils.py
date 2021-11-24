@@ -112,3 +112,17 @@ def read_log(file):
                                   np.frombuffer(m.data + bytearray([0] * (8 - m.dlc)), '<u8')[0]) for m in msgs)
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
     return df
+
+
+def to_logfile(df, file, force=False):
+    file = Path(file)
+    if file.exists() and not force:
+        print(f'File: {file} already exists!')
+        return
+    tmp = df.copy()
+    tmp['data'] = df['data'].view('>u8')
+    with open(file, 'w') as f:
+        for idx, row in tmp.iterrows():
+            data = f"{row['data']:016x}"[:row['dlc']*2]
+            line = f'({row["timestamp"].timestamp():0.6f}) can0 {row["arbitration_id"]:03X}#{data}\n'
+            f.write(line)
