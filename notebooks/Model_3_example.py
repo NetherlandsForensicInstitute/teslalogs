@@ -71,9 +71,23 @@ steering = log_viewer.get_plot("ID129SteeringAngle", "SteeringAngle129")
 # # HRL 
 
 # %%
-hrl_path = Path('/tmp/HRL/')    
+# Carve for deleted HRL files
+from teslalogs.model_3 import HRL_carver
+# !mkdir -p /tmp/HRL/
+# Supply path to physical image, output directory and VIN to search for
+HRL_carver.main(Path('/path/to/image.dd'), Path('/tmp/HRL/'), 'FAKETESLAVIN')
+
+# %% tags=[]
+# Handle HRL's from the HRL dir
+hrl_path = Path('/tmp/HRL/') 
 hrl_df = pd.concat(HRL.parse_file(p) for p in tqdm(hrl_path.glob('*.HRL')) if not 'CUR' in p.name)
 hrl_df = hrl_df.sort_values('timestamp').reset_index()
+
+# %% tags=[]
+# Alternatively use a vectorized approach which is much faster for loading many HRL's
+from teslalogs.model_3.HRL_vectorized import parse_HRLs
+hrl_path = Path('/tmp/HRL/')
+hrl_df = parse_HRLs(hrl_path)
 
 # %%
 hrl_viewer = SignalViewer(hrl_df, dbc)
@@ -164,5 +178,3 @@ def update_sig(signal):
 
 view = pn.Column(video, time_slider, pn.Row(update_sig, vid_sigviewer.nbview()[0]))
 view
-
-# %%
