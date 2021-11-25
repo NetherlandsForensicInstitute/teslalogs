@@ -124,5 +124,5 @@ def to_logfile(df, file, force=False):
     with open(file, 'w') as f:
         for idx, row in tmp.iterrows():
             data = f"{row['data']:016x}"[:row['dlc']*2]
-            line = f'({row["timestamp"].timestamp():0.6f}) can0 {row["arbitration_id"]:03X}#{data}\n'
+            line = f'({row["timestamp"].timestamp():0.6f}) can{row["channel"]} {row["arbitration_id"]:03X}#{data}\n'
             f.write(line)
