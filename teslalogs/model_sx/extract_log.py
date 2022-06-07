@@ -134,9 +134,9 @@ def binary_search_start(data, dtmin):
         mid = (high + low) // 2
         entry_start = hits[mid].start() - 6
         dt = get_tstamp_at(data, entry_start)
+        candidate = entry_start
         # go top
         if dt < dtmin:
-            candidate = entry_start
             low = mid + 1
         # go bottom
         elif dt > dtmin:
