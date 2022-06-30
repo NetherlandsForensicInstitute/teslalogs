@@ -174,7 +174,7 @@ def main(dbcs, gtw_bin_path, out_path):
                     if msg.is_multiplexed():
                         # TODO maybe suggest candidate signals
                         continue
-                    signal = brute_force_signals(emulator, fcn1, msg, can_payload_addr, log_id=log_id)
+                    signal = brute_force_signals(emulator, fcn1, msg, can_payload_addr)
                     if signal is not None:
                         match = mapped_sig(BUS_IDS[bus_id],
                                            msg.name,
