@@ -304,7 +304,7 @@ During the update procedure of the other modules, the gtw seems to load a differ
 
 Having a firmware image and a loading address is the bare minimum to start reverse engineering. 
 You'll also need the reference manual of the microcontroller which is an NXP SPC5748GSMMJ6. 
-Grabbing the manual of the non-automotive grade [MCP574x](https://www.nxp.com/products/processors-and-microcontrollers/power-architecture/mpc55xx-5xxx-mcus/ultra-reliable-mpc57xx-mcus/ultra-reliable-mcus-for-automotive-industrial-control-and-gateway:MPC574xB-C-G?tab=Documentation_Tab) suffices.
+Grabbing the manual of the non-automotive grade [MPC574x](https://www.nxp.com/products/processors-and-microcontrollers/power-architecture/mpc55xx-5xxx-mcus/ultra-reliable-mpc57xx-mcus/ultra-reliable-mcus-for-automotive-industrial-control-and-gateway:MPC574xB-C-G?tab=Documentation_Tab) suffices.
 
 From the reference manual: The gateway has 2 x 160 MHz Power Architecture® e200Z4 Dual issue, 32-bit CPU and 1 x 80 MHz Power Architecture® e200Z2 Single issue, 32-bit CPU. 
 Both kinds of CPU's use variable length encoding (VLE).
