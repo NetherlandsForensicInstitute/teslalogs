@@ -24,10 +24,12 @@ import datetime as dt
 from tqdm import tqdm
 from pathlib import Path
 
+from teslalogs.model_3.LOG import LOG
+
 if '..' not in sys.path:
     sys.path.append('..')  # Ugly hack to allow imports below to work
 from teslalogs import raw
-from teslalogs.model_3 import LOG, HRL
+from teslalogs.model_3.HRL import HRL
 from teslalogs.model_3.CL import CL
 from teslalogs.signals import SignalViewer
 
