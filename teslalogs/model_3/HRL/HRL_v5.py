@@ -30,6 +30,7 @@ from asammdf.blocks.v4_constants import BUS_TYPE_CAN, FLAG_CG_BUS_EVENT, SOURCE_
 sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
 
 from teslalogs.model_3.HRL.hrl_v5_parser import HrlV5Parser
+from teslalogs.model_3.HRL.model_3_hrl import Model3Hrl
 
 STD_DTYPE = np.dtype(
     [
@@ -51,7 +52,7 @@ ACQ_SOURCE = SourceInformation(source_type=SOURCE_BUS, bus_type=BUS_TYPE_CAN)
 
 
 class Message:
-    def __init__(self, timestamp, record: HrlV5Parser.CanFrame):
+    def __init__(self, timestamp, record: HrlV5Parser.CanFrame | Model3Hrl.CanFrame):
         self.timestamp = timestamp
         self.channel = record.bus_id.value + 1  # 0 refers to any bus in asammdf, so add 1
         self.arbitration_id = record.arb_id

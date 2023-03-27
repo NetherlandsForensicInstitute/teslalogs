@@ -32,9 +32,9 @@ types:
         type: u4
       - id: end_time
         type: u4
-      - id: unknown2
+      - id: start_obj_idx
         type: u4
-      - id: unknown3
+      - id: end_obj_idx  # check if the last is included
         type: u4
       - id: file_index
         type: u4
