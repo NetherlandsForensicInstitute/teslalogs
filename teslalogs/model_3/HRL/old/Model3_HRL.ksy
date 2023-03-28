@@ -33,6 +33,7 @@ types:
     instances:
       blocksize:
         value: 'version <= 1 ? 0x4000 : 0x8000'  # Ugly, but I did not find a good lookup table in Kaitai
+
   block:
     seq:
       - id: records
@@ -94,6 +95,7 @@ types:
         1: party
         2: ch
         3: eth  # ETH seems to not be present in HRL, it is in the regular logs
+        
   timestamp_frame:
     seq:
       - id: milliseconds_from_start
