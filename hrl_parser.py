@@ -16,21 +16,13 @@ class HrlParser(KaitaiStruct):
         self._read()
 
     def _read(self):
-        self.version = self._io.read_u1()
-        _on = self.version
-        if _on == 5:
-            self.header = HrlParser.HeaderV5(self._io, self, self._root)
-        else:
-            self.header = HrlParser.HeaderLtv5(self._io, self, self._root)
-        self.padding = self._io.read_bytes((self._root.blocksize - self._io.pos()))
+        self.header = HrlParser.Header(self._io, self, self._root)
         self._raw_blocks = []
         self.blocks = []
-        i = 0
-        while not self._io.is_eof():
+        for i in range(3):
             self._raw_blocks.append(self._io.read_bytes(self.blocksize))
-            _io__raw_blocks = KaitaiStream(BytesIO(self._raw_blocks[-1]))
+            _io__raw_blocks = KaitaiStream(BytesIO(self._raw_blocks[i]))
             self.blocks.append(HrlParser.Block(_io__raw_blocks, self, self._root))
-            i += 1
 
 
     class BlockMetaData(KaitaiStruct):
@@ -66,7 +58,7 @@ class HrlParser(KaitaiStruct):
             self._read()
 
         def _read(self):
-            if self._root.version >= 5:
+            if self._root.header.version >= 5:
                 self.metadata = HrlParser.BlockMetaData(self._io, self, self._root)
 
             self._raw_records = []
@@ -76,13 +68,14 @@ class HrlParser(KaitaiStruct):
                 _io__raw_records = KaitaiStream(BytesIO(self._raw_records[i]))
                 self.records.append(HrlParser.Record(_io__raw_records, self, self._root))
 
+            self.crc = self._io.read_u4be()
 
         @property
         def data_size(self):
             if hasattr(self, '_m_data_size'):
                 return self._m_data_size
 
-            self._m_data_size = (self.metadata.data_size if self._root.version >= 5 else self._root.blocksize)
+            self._m_data_size = (self.metadata.data_size if self._root.header.version >= 5 else self._root.blocksize)
             return getattr(self, '_m_data_size', None)
 
         @property
@@ -91,21 +84,10 @@ class HrlParser(KaitaiStruct):
                 return self._m_raw_data
 
             _pos = self._io.pos()
-            self._io.seek((32 if self._root.version >= 5 else 0))
-            self._m_raw_data = self._io.read_bytes((self._root.blocksize - (self._root.blocksize % self._root.record_size)))
+            self._io.seek((32 if self._root.header.version >= 5 else 0))
+            self._m_raw_data = self._io.read_bytes((self.data_size - self._root.record_size))
             self._io.seek(_pos)
             return getattr(self, '_m_raw_data', None)
-
-        @property
-        def crc(self):
-            if hasattr(self, '_m_crc'):
-                return self._m_crc
-
-            _pos = self._io.pos()
-            self._io.seek((self._root.blocksize - (self._root.blocksize % self._root.record_size)))
-            self._m_crc = self._io.read_u4be()
-            self._io.seek(_pos)
-            return getattr(self, '_m_crc', None)
 
 
     class HeaderV5(KaitaiStruct):
@@ -120,8 +102,8 @@ class HrlParser(KaitaiStruct):
             self.vehicle_type = (KaitaiStream.bytes_terminate(self._io.read_bytes(10), 0, False)).decode(u"UTF-8")
             self.git_hash = self._io.read_bytes(20)
             self.unknown1 = self._io.read_u2be()
-            self.start_timestamp = self._io.read_u4be()
-            self.end_timestamp = self._io.read_u4be()
+            self.start_time = self._io.read_u4be()
+            self.end_time = self._io.read_u4be()
             self.start_obj_idx = self._io.read_u4be()
             self.end_obj_idx = self._io.read_u4be()
             self.file_index = self._io.read_u4be()
@@ -133,6 +115,23 @@ class HrlParser(KaitaiStruct):
             self.block_size = self._io.read_u4be()
             self.unknown8 = self._io.read_u4be()
             self.unknown9 = self._io.read_u4be()
+            self.padding = self._io.read_bytes((self._root.blocksize - self._io.pos()))
+
+
+    class Header(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.version = self._io.read_u1()
+            _on = self.version
+            if _on == 5:
+                self.header_body = HrlParser.HeaderV5(self._io, self, self._root)
+            else:
+                self.header_body = HrlParser.HeaderLtv5(self._io, self, self._root)
 
 
     class HeaderLtv5(KaitaiStruct):
@@ -147,6 +146,7 @@ class HrlParser(KaitaiStruct):
             self.vin = (KaitaiStream.bytes_terminate(self._io.read_bytes(18), 0, False)).decode(u"UTF-8")
             self.unknown = self._io.read_u2be()
             self.start_timestamp = self._io.read_u4be()
+            self.padding = self._io.read_bytes((self._root.blocksize - self._io.pos()))
 
 
     class EmptyFrame(KaitaiStruct):
@@ -246,7 +246,7 @@ class HrlParser(KaitaiStruct):
         if hasattr(self, '_m_blocksize'):
             return self._m_blocksize
 
-        self._m_blocksize = (16384 if self.version <= 1 else 32768)
+        self._m_blocksize = (16384 if self.header.version <= 1 else 32768)
         return getattr(self, '_m_blocksize', None)
 
 

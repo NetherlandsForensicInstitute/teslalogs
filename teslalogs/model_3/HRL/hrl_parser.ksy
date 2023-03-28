@@ -4,31 +4,27 @@ meta:
   endian: be
   
 seq:
+  - id: version
+    type: u1
   - id: header
-    type: header
+    type: 
+      switch-on: version
+      cases:
+        5: header_v5
+        _: header_ltv5
+  - id: padding  # On version 3 there's actually something here, but I don't know what
+    size: _root.blocksize - _io.pos
   - id: blocks
     type: block
     size: blocksize
-    repeat: expr
-    repeat-expr: 3
+    repeat: eos
 instances:
   record_size:
     value: 11
   blocksize:
-    value: 'header.version <= 1 ? 0x4000 : 0x8000'
+    value: 'version <= 1 ? 0x4000 : 0x8000'
 
 types:
-  header:
-    seq:
-      - id: version
-        type: u1
-      - id: header_body
-        type: 
-          switch-on: version
-          cases:
-            5: header_v5
-            _: header_ltv5
-
   header_v5:
     seq:
       - id: unknown_0
@@ -41,9 +37,9 @@ types:
         size: 20
       - id: unknown1
         type: u2
-      - id: start_time
+      - id: start_timestamp
         type: u4
-      - id: end_time
+      - id: end_timestamp
         type: u4
       - id: start_obj_idx
         type: u4
@@ -69,8 +65,6 @@ types:
         type: u4
       - id: unknown9
         type: u4
-      - id: padding 
-        size: _root.blocksize - _io.pos
 
   header_ltv5:
     seq:
@@ -85,29 +79,26 @@ types:
         type: u2
       - id: start_timestamp
         type: u4
-      - id: padding  # On version 3 there's actually something here, but I don't know what
-        size: _root.blocksize - _io.pos
       
   block:
     seq: 
       - id: metadata
         type: block_meta_data
-        if: _root.header.version >= 5
+        if: _root.version >= 5
       - id: records
         type: record
         size: _root.record_size
         repeat: expr
         repeat-expr: data_size / _root.record_size - 1
-        # repeat: until
-        # repeat-until: '_index == (metadata.data_size / _root.record_size - 1)' # different behaviour in IDE than local
-      - id: crc
-        type: u4
     instances:
       data_size: 
-        value: '_root.header.version >= 5 ? metadata.data_size :_root.blocksize'
+        value: '_root.version >= 5 ? metadata.data_size : _root.blocksize'
       raw_data:
-        pos: '_root.header.version >= 5 ? 0x20 : 0'
-        size: data_size - _root.record_size
+        pos: '_root.version >= 5 ? 0x20 : 0'
+        size: _root.blocksize - (_root.blocksize % _root.record_size)
+      crc:
+        type: u4
+        pos: _root.blocksize - (_root.blocksize % _root.record_size)
     
   block_meta_data:
     seq:
@@ -180,3 +171,4 @@ types:
         type: u4
         
   empty_frame: {}
+

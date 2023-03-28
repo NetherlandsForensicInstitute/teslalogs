@@ -24,13 +24,12 @@ sys.stdout, sys.stderr = NullWriter(), NullWriter()
 from asammdf import MDF, Signal
 from asammdf.blocks.mdf_v4 import MDF4
 from asammdf.blocks.v4_blocks import SourceInformation
-from asammdf.blocks.v4_constants import BUS_TYPE_CAN, FLAG_CG_BUS_EVENT, SOURCE_BUS
+from asammdf.blocks.v4_constants import BUS_TYPE_CAN, SOURCE_BUS
 
 # unsilence command-line output
 sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
 
-from teslalogs.model_3.HRL.hrl_v5_parser import HrlV5Parser
-from teslalogs.model_3.HRL.model_3_hrl import Model3Hrl
+from teslalogs.model_3.HRL.hrl_parser import HrlParser
 
 STD_DTYPE = np.dtype(
     [
@@ -47,12 +46,11 @@ STD_DTYPE = np.dtype(
     ]
 )
 
-# ACQ_SOURCE = SourceInformation(source_type=SOURCE_BUS, bus_type=BUS_TYPE_CAN, flags=FLAG_CG_BUS_EVENT)
 ACQ_SOURCE = SourceInformation(source_type=SOURCE_BUS, bus_type=BUS_TYPE_CAN)
 
 
 class Message:
-    def __init__(self, timestamp, record: HrlV5Parser.CanFrame | Model3Hrl.CanFrame):
+    def __init__(self, timestamp, record: HrlParser.CanFrame):
         self.timestamp = timestamp
         self.channel = record.bus_id.value + 1  # 0 refers to any bus in asammdf, so add 1
         self.arbitration_id = record.arb_id
@@ -81,7 +79,7 @@ class MDFWriter:
             Signal(
                 name="CAN_DataFrame",
                 samples=np.array([], dtype=STD_DTYPE),
-                timestamps=np.array([], dtype="<f8"),  # , dtype="<f8"),
+                timestamps=np.array([], dtype="<f8"),
                 attachment=attachment,
                 source=ACQ_SOURCE,
             )
@@ -116,19 +114,17 @@ class MDFWriter:
         self._std_buffer["CAN_DataFrame.ESI"] = 0
         self._std_buffer["CAN_DataFrame.BRS"] = 0
         self._std_buffer["CAN_DataFrame.EDL"] = 0
-        # print(f"{timestamp:9.6f}")
+
         sigs = [(np.array([timestamp]), None), (self._std_buffer, None)]
         self._mdf.extend(0, sigs)
-
-        # self.index += 1
 
         # reset buffer structure
         self._std_buffer = np.zeros(1, dtype=STD_DTYPE)
 
 
-class HRLParser:
+class HRL:
     def __init__(self, in_file):
-        self._parser = HrlV5Parser.from_file(in_file)
+        self._parser = HrlParser.from_file(in_file)
 
     @staticmethod
     def verify_block(block):
@@ -136,72 +132,22 @@ class HRLParser:
         return block.crc == crc_calc
 
     def get_can_frames(self) -> Message:
-        # t_start = self._parser.header.start_time * 1000
-
         rolling_time = 0
-        for block in self._parser.blocks:
+        for i, block in enumerate(self._parser.blocks):
             if not self.verify_block(block):
-                print("CRC error, skipping block")
+                print(f"CRC error in block {i}! Skipping block.")
                 continue
+
+            # print(f"CRC in block {i} okay.")
 
             for record in block.records:
                 if record.end_of_block:
                     break
-                if record.flags == HrlV5Parser.Record.RecordType.time:
+                if record.flags == HrlParser.Record.RecordType.time:
                     rolling_time = record.payload.time_ms_from_start
-                elif record.flags == HrlV5Parser.Record.RecordType.can:
+                elif record.flags == HrlParser.Record.RecordType.can:
                     time = rolling_time + record.time_count
                     yield Message(time / 1000, record.payload)
-
-    # def to_mdf(self, out_file, dbcs=None):
-    #     count = 0
-    #     for time, frame in sorted(self.get_can_frames(), key=lambda x: x[0]):  # The HRL blocks can be out of order
-    #         self.on_message_received
-
-    #         count += 1
-
-    # str_data = frame.data.hex()[: frame.dlc * 2].upper()
-    # print(f"({time:0.6f}) can{frame.bus_id.value} {frame.arb_id:03X}#{str_data}")
-
-    # zeros = [0] * len(timestamp)
-    # samples = [bus, arb_id, zeros, dlc, dlc, data, zeros, zeros, zeros, zeros]
-    # types = np.dtype(
-    #     [
-    #         ("CAN_DataFrame.BusChannel", "u1"),
-    #         ("CAN_DataFrame.ID", "<u4"),
-    #         ("CAN_DataFrame.IDE", "u1"),
-    #         ("CAN_DataFrame.DLC", "u1"),
-    #         ("CAN_DataFrame.DataLength", "u1"),
-    #         ("CAN_DataFrame.DataBytes", "u1", (8,)),
-    #         ("CAN_DataFrame.Dir", "u1"),
-    #         ("CAN_DataFrame.EDL", "u1"),
-    #         ("CAN_DataFrame.ESI", "u1"),
-    #         ("CAN_DataFrame.BRS", "u1"),
-    #     ]
-    # )
-
-    # mdf = MDF()
-    # sig = Signal(
-    #     samples=np.core.records.fromarrays(samples, dtype=types),
-    #     timestamps=np.array(timestamp, dtype="<f8"),
-    #     name="CAN_DataFrame",
-    #     comment="CAN_DataFrame",
-    #     flags=BUS_TYPE_CAN,
-    #     source=ACQ_SOURCE,
-    # )
-
-    # source = SourceInformation(source_type=SOURCE_BUS, bus_type=BUS_TYPE_CAN, flags=FLAG_CG_BUS_EVENT)
-    # mdf.append([sig], acq_source=source)
-    # mdf.groups[0].channel_group.flags = FLAG_CG_BUS_EVENT
-
-    # mdf.export("csv", "/media/projects/hrl5_.txt")
-    # mdf.save(out_file, overwrite=True)
-
-    # if dbcs:
-    #     mdf = mdf.extract_bus_logging(database_files=dbcs)
-    #     mdf.save(out_file, overwrite=False)
-
-    # return mdf
 
 
 if __name__ == "__main__":
@@ -214,26 +160,21 @@ if __name__ == "__main__":
         print("File not found, exiting")
         exit(1)
 
-    parser = HRLParser(args.hrl_path)
+    hrl = HRL(args.hrl_path)
     mdfwriter = MDFWriter(args.out_path)
 
-    print(len([frame.timestamp for frame in parser.get_can_frames()]))
-    print(parser._parser.header.start_time)
+    # print(len([frame.timestamp for frame in hrl.get_can_frames()]))
+    # print(hrl._parser.header.start_timestamp)
 
-    mdfwriter.set_start_timestamp(parser._parser.header.start_time)
-    for can_frame in sorted(parser.get_can_frames(), key=lambda x: x.timestamp):  # The HRL blocks may be out of order
+    mdfwriter.set_start_timestamp(hrl._parser.header.start_timestamp)
+    for can_frame in sorted(hrl.get_can_frames(), key=lambda x: x.timestamp):  # The HRL blocks may be out of order
         mdfwriter.on_message_received(can_frame)
 
         # str_data = "".join([f"{d:02X}" for d in can_frame.data])
         # print(f"{can_frame.timestamp:0.6f} can{can_frame.channel} {can_frame.arbitration_id:03X}#{str_data}")
 
-    print("finished adding can frames. Saving to csv...")
-    mdfwriter._mdf.export("csv", "/media/projects/hrl5_.csv")
-    print("Saved to csv! Closing...")
+    print("finished adding can frames. Saving and closing...")
     mdfwriter.close()
-    print("Closed!")
-
-    # a = 1
 
     # databases = {
     #     "CAN": [
