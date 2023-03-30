@@ -11,7 +11,7 @@ seq:
       switch-on: version
       cases:
         5: header_v5
-        _: header_ltv5
+        _: header_v0
   - id: padding  # On version 3 there's actually something here, but I don't know what
     size: _root.blocksize - _io.pos
   - id: blocks
@@ -23,6 +23,12 @@ instances:
     value: 11
   blocksize:
     value: 'version <= 1 ? 0x4000 : 0x8000'
+  data_size: 
+    value: '_root.version >= 5 ? _root.blocksize - 0x20 : _root.blocksize'
+  num_records:
+    value: (data_size - 4) / _root.record_size
+  records_size:
+    value: num_records * _root.record_size
 
 types:
   header_v5:
@@ -66,7 +72,7 @@ types:
       - id: unknown9
         type: u4
 
-  header_ltv5:
+  header_v0:
     seq:
       - id: git_hash
         size: 20
@@ -82,31 +88,33 @@ types:
       
   block:
     seq: 
-      - id: metadata
-        type: block_meta_data
-        if: _root.version >= 5
+      - id: metadata  # not using data size given in metadata
+        type: block_metadata
+        if: '_root.version >= 5 and valid'
       - id: records
         type: record
         size: _root.record_size
         repeat: expr
-        repeat-expr: data_size / _root.record_size - 1
-    instances:
-      data_size: 
-        value: '_root.version >= 5 ? metadata.data_size : _root.blocksize'
-      raw_data:
-        pos: '_root.version >= 5 ? 0x20 : 0'
-        size: _root.blocksize - (_root.blocksize % _root.record_size)
-      crc:
+        repeat-expr: _root.num_records
+      - id: crc
         type: u4
-        pos: _root.blocksize - (_root.blocksize % _root.record_size)
+    instances:
+      as_raw_records:
+        pos: '_root.version >= 5 ? 0x20 : 0'
+        size: _root.records_size
+      magic:
+        pos: 0
+        size: 4
+      valid:
+        value: '_root.version < 5 or magic == [0xba, 0xdd, 0xca, 0xfe]'
     
-  block_meta_data:
+  block_metadata:
     seq:
       - id: block_magic
         contents: [0xba, 0xdd, 0xca, 0xfe]
       - id: zero0
         contents: [0x00, 0x00, 0x00]
-      - id: data_size
+      - id: data_size  # ignored
         type: u4
       - id: tstart
         type: u4

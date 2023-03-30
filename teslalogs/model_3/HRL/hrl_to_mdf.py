@@ -52,7 +52,7 @@ ACQ_SOURCE = SourceInformation(source_type=SOURCE_BUS, bus_type=BUS_TYPE_CAN)
 class Message:
     def __init__(self, timestamp, record: HrlParser.CanFrame):
         self.timestamp = timestamp
-        self.channel = record.bus_id.value + 1  # 0 refers to any bus in asammdf, so add 1
+        self.channel = record.bus_id.value + 1  # in asammdf 0 refers to any bus, so add 1
         self.arbitration_id = record.arb_id
         self.dlc = record.dlc
         self.data = [int(d) for d in record.data]
@@ -128,17 +128,18 @@ class HRL:
 
     @staticmethod
     def verify_block(block):
-        crc_calc = ~crc32(block.raw_data) & 0xFFFFFFFF
+        crc_calc = ~crc32(block.as_raw_records) & 0xFFFFFFFF
         return block.crc == crc_calc
 
     def get_can_frames(self) -> Message:
         rolling_time = 0
         for i, block in enumerate(self._parser.blocks):
+            if not block.valid:
+                continue
+
             if not self.verify_block(block):
                 print(f"CRC error in block {i}! Skipping block.")
                 continue
-
-            # print(f"CRC in block {i} okay.")
 
             for record in block.records:
                 if record.end_of_block:
