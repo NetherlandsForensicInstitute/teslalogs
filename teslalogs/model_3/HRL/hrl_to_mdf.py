@@ -56,31 +56,21 @@ class Message:
         self.arbitration_id = record.arb_id
         self.dlc = record.dlc
         self.data = [int(d) for d in record.data]
+        self.size = len(self.data)
 
 
 class MDFWriter:
-    def __init__(self, out_file: str | os.PathLike, database: str | os.PathLike = None, compression_level: int = 2):
-        self.file = out_file
+    def __init__(self, compression_level: int = 2):
+        # self.file = out_file
         self._mdf = cast(MDF4, MDF(version="4.10"))
         self._compression_level = compression_level
         self.max_timestamp = 0
-
-        if database:
-            database = Path(database).resolve()
-            if database.exists():
-                data = database.read_bytes()
-                attachment = data, database.name, md5(data).digest()
-            else:
-                attachment = None
-        else:
-            attachment = None
 
         self._mdf.append(
             Signal(
                 name="CAN_DataFrame",
                 samples=np.array([], dtype=STD_DTYPE),
                 timestamps=np.array([], dtype="<f8"),
-                attachment=attachment,
                 source=ACQ_SOURCE,
             )
         )
@@ -88,28 +78,30 @@ class MDFWriter:
         self._std_buffer = np.zeros(1, dtype=STD_DTYPE)
 
     def close(self) -> None:
-        self._mdf.save(self.file, compression=self._compression_level)
         self._mdf.close()
+
+    def save(self, file_name: str | os.PathLike) -> None:
+        self._mdf.save(file_name, compression=self._compression_level)
 
     def set_start_timestamp(self, timestamp: int):
         self.start_timestamp = timestamp
         self._mdf.header.start_time = datetime.fromtimestamp(timestamp)
 
     def on_message_received(self, msg: Message) -> None:
+        # TODO batch storing of messages to MDF (to speed things up)
+
         if msg.timestamp <= self.max_timestamp:
             timestamp = self.max_timestamp + 0.000001
         else:
             timestamp = msg.timestamp
         self.max_timestamp = timestamp
 
-        size = len(msg.data)
-
         self._std_buffer["CAN_DataFrame.BusChannel"] = msg.channel
         self._std_buffer["CAN_DataFrame.ID"] = msg.arbitration_id
         self._std_buffer["CAN_DataFrame.IDE"] = 0
         self._std_buffer["CAN_DataFrame.Dir"] = 0  # if msg.is_rx else 1
-        self._std_buffer["CAN_DataFrame.DataLength"] = size
-        self._std_buffer["CAN_DataFrame.DataBytes"][0, :size] = msg.data
+        self._std_buffer["CAN_DataFrame.DataLength"] = msg.size
+        self._std_buffer["CAN_DataFrame.DataBytes"][0, : msg.size] = msg.data
         self._std_buffer["CAN_DataFrame.DLC"] = msg.dlc
         self._std_buffer["CAN_DataFrame.ESI"] = 0
         self._std_buffer["CAN_DataFrame.BRS"] = 0
@@ -120,6 +112,11 @@ class MDFWriter:
 
         # reset buffer structure
         self._std_buffer = np.zeros(1, dtype=STD_DTYPE)
+
+    def extract_logging(self, dbc):
+        if dbc:
+            can_dbc = {"CAN": dbc}
+            self._mdf = self._mdf.extract_bus_logging(database_files=can_dbc)
 
 
 class HRL:
@@ -132,6 +129,8 @@ class HRL:
         return block.crc == crc_calc
 
     def get_can_frames(self) -> Message:
+        # TODO switch to vectorised parsing of frames (to speed things up)
+
         rolling_time = 0
         for i, block in enumerate(self._parser.blocks):
             if not block.valid:
@@ -154,33 +153,40 @@ class HRL:
 if __name__ == "__main__":
     args = ArgumentParser()
     args.add_argument("hrl_path", type=Path, help="Path to HRL file")
-    args.add_argument("out_path", type=Path, help="Path to output file")
+    args.add_argument("out_path", type=str, help="Path to output file")
+    args.add_argument(
+        "-d", "--dbc", action="append", nargs=2, metavar=("path", "channel"), help="CAN database files and channel"
+    )
     args = args.parse_args()
 
     if not args.hrl_path.exists() or not args.hrl_path.is_file():
-        print("File not found, exiting")
+        print(f"HRL file {args.hrl_path} not found, exiting")
         exit(1)
 
+    # parse HRL
+    print("Parsing HRL...", end="\r")
     hrl = HRL(args.hrl_path)
-    mdfwriter = MDFWriter(args.out_path)
+    print("HRL parsed!   ")
 
-    # print(len([frame.timestamp for frame in hrl.get_can_frames()]))
-    # print(hrl._parser.header.start_timestamp)
-
+    # write CAN frames to MF4
+    print("Saving to MF4...", end="\r")
+    mdfwriter = MDFWriter()
     mdfwriter.set_start_timestamp(hrl._parser.header.start_timestamp)
     for can_frame in sorted(hrl.get_can_frames(), key=lambda x: x.timestamp):  # The HRL blocks may be out of order
         mdfwriter.on_message_received(can_frame)
 
-        # str_data = "".join([f"{d:02X}" for d in can_frame.data])
-        # print(f"{can_frame.timestamp:0.6f} can{can_frame.channel} {can_frame.arbitration_id:03X}#{str_data}")
+    if args.dbc:
+        for i in range(len(args.dbc)):
+            path, channel = args.dbc[i]
+            args.dbc[i] = [Path(path), int(channel) + 1]
+            if not args.dbc[i][0].exists() or not args.dbc[i][0].is_file():
+                print(f"DBC file {args.dbc[i][0]} not found, exiting")
+                exit(1)
 
-    print("finished adding can frames. Saving and closing...")
+        # extract logging with dbc(s)
+        mdfwriter.extract_logging(args.dbc)
+
+    mdfwriter.save(args.out_path)
+    print(f"Saved to MF4!   ")
+
     mdfwriter.close()
-
-    # databases = {
-    #     "CAN": [
-    #         ("/media/projects/Tesla_HRL/dbcs/Model3_dbcs/Model3_VEH.compact.dbc", 1),
-    #         ("/media/projects/Tesla_HRL/dbcs/Model3_dbcs/Model3_PARTY.compact.dbc", 2),
-    #         ("/media/projects/Tesla_HRL/dbcs/Model3_dbcs/Model3_CH.compact.dbc", 3),
-    #     ]
-    # }
