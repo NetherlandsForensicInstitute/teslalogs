@@ -52,7 +52,7 @@ ACQ_SOURCE = SourceInformation(source_type=SOURCE_BUS, bus_type=BUS_TYPE_CAN)
 class Message:
     def __init__(self, timestamp, record: HrlParser.CanFrame):
         self.timestamp = timestamp
-        self.channel = record.bus_id.value + 1  # in asammdf 0 refers to any bus, so add 1
+        self.channel = record.bus_id.value
         self.arbitration_id = record.arb_id
         self.dlc = record.dlc
         self.data = [int(d) for d in record.data]
@@ -96,7 +96,7 @@ class MDFWriter:
             timestamp = msg.timestamp
         self.max_timestamp = timestamp
 
-        self._std_buffer["CAN_DataFrame.BusChannel"] = msg.channel
+        self._std_buffer["CAN_DataFrame.BusChannel"] = msg.channel + 1  # in asammdf 0 refers to any bus, so add 1
         self._std_buffer["CAN_DataFrame.ID"] = msg.arbitration_id
         self._std_buffer["CAN_DataFrame.IDE"] = 0
         self._std_buffer["CAN_DataFrame.Dir"] = 0  # if msg.is_rx else 1
@@ -150,24 +150,7 @@ class HRL:
                     yield Message(time / 1000, record.payload)
 
 
-if __name__ == "__main__":
-    args = ArgumentParser()
-    args.add_argument("hrl_path", type=Path, help="Path to HRL file")
-    args.add_argument("out_path", type=str, help="Path to output file")
-    args.add_argument(
-        "-d", "--dbc", action="append", nargs=2, metavar=("path", "channel"), help="CAN database files and channel"
-    )
-    args = args.parse_args()
-
-    if not args.hrl_path.exists() or not args.hrl_path.is_file():
-        print(f"HRL file {args.hrl_path} not found, exiting")
-        exit(1)
-
-    # parse HRL
-    print("Parsing HRL...", end="\r")
-    hrl = HRL(args.hrl_path)
-    print("HRL parsed!   ")
-
+def save_as_mdf(hrl, args):
     # write CAN frames to MF4
     print("Saving to MF4...", end="\r")
     mdfwriter = MDFWriter()
@@ -187,6 +170,49 @@ if __name__ == "__main__":
         mdfwriter.extract_logging(args.dbc)
 
     mdfwriter.save(args.out_path)
-    print(f"Saved to MF4!   ")
 
     mdfwriter.close()
+
+
+def save_as_log(hrl, args):
+    if args.dbc:
+        print("Decoding of CAN frames not supported in this format. The DBC(s) are ignored.")
+
+    with open(args.out_path, "w") as f:
+        start_timestamp = hrl._parser.header.start_timestamp
+        for frame in sorted(hrl.get_can_frames(), key=lambda x: x.timestamp):  # The HRL blocks may be out of order
+            data_str = "".join([f"{d:X}" for d in frame.data])
+            format_str = (
+                f"({start_timestamp + frame.timestamp:.6f}) can{frame.channel} {frame.arbitration_id:X}#{data_str}\n"
+            )
+            f.write(format_str)
+
+
+if __name__ == "__main__":
+    args = ArgumentParser()
+    args.add_argument("hrl_path", type=Path, help="Path to HRL file")
+    args.add_argument("out_path", type=str, help="Path to output file")
+    args.add_argument(
+        "-d", "--dbc", action="append", nargs=2, metavar=("path", "channel"), help="CAN database files and channel"
+    )
+    args.add_argument("-f", "--format", choices=["mf4", "log"], default="log", help="Format to save to")
+    args = args.parse_args()
+
+    if not args.hrl_path.exists() or not args.hrl_path.is_file():
+        print(f"HRL file {args.hrl_path} not found, exiting")
+        exit(1)
+
+    if not Path(args.out_path).parent.exists():
+        print(f"Output path {Path(args.out_path).parent} not found, exiting")
+        exit(1)
+
+    # parse HRL
+    print("Parsing HRL...", end="\r")
+    hrl = HRL(args.hrl_path)
+    print("HRL parsed!   ")
+
+    if args.format == "mf4":
+        save_as_mdf(hrl, args)
+    elif args.format == "log":
+        save_as_log(hrl, args)
+    print("Saved!")
