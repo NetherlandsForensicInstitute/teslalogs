@@ -25,7 +25,7 @@ class CL:
         endidx = 0
         for idx, header in enumerate(self.headers):
             if not startidx and header.tstart >= tstart:
-                startidx = idx
+                startidx = idx - 1 if idx else idx
             if header.tend >= tend:
                 endidx = idx
                 break
